@@ -3,9 +3,11 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"math"
 	"math/cmplx"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -312,7 +314,7 @@ func theAppend() {
 func theRange() {
 	// var pow = []int{1, 2, 4, 8, 16, 32, 64, 128}
 
-	// // When ranging over a slice, two values are returned for each iteration, the first is the index, and the second is a copy of the element at that index
+	// When ranging over a slice, two values are returned for each iteration, the first is the index, and the second is a copy of the element at that index
 	// for i, v := range pow {
 	// 	fmt.Printf("2**%d = %d\n", i, v)
 	// }
@@ -404,6 +406,349 @@ func functionClosure() {
 	}
 }
 
+type newVertex struct {
+	X, Y float64
+}
+
+func (v newVertex) Abs() float64 {
+	return math.Sqrt(v.X*v.X + v.Y*v.Y)
+}
+
+type MyFloat float64
+
+func (f MyFloat) Abs() float64 {
+	if f < 0 {
+		return float64(-f)
+	}
+	return float64(f)
+}
+
+func (v *newVertex) Scale(f float64) {
+	v.X = v.X * f
+	v.Y = v.Y * f
+}
+
+func ScaleFunc(v *newVertex, f float64) {
+	v.X = v.X * f
+	v.Y = v.Y * f
+}
+
+func theMethod() {
+	v := newVertex{3, 4}
+	fmt.Println(v.Abs())
+
+	f := MyFloat(-math.Sqrt2)
+	fmt.Println(f.Abs())
+
+	v.Scale(10)
+	fmt.Println(v.Abs())
+
+	v.Scale(2)
+	ScaleFunc(&v, 10)
+
+	p := &newVertex{4, 3}
+	p.Scale(3)
+	ScaleFunc(p, 8)
+
+	fmt.Println(v, p)
+}
+
+type Abser interface {
+	Abs() float64
+}
+
+type I interface {
+	M()
+}
+
+type T struct {
+	S string
+}
+
+// This method means type T implements the interface I,
+// but we don't need to explicitly declare that it does so.
+// func (t T) M() {
+// 	fmt.Println(t.S)
+// }
+
+// func theInterface() {
+// 	var a Abser
+// 	f := MyFloat(-math.Sqrt2)
+// 	v := newVertex{3, 4}
+
+// 	a = f  // a MyFloat implements Abser
+// 	a = &v // a *Vertex implements Abser
+
+// 	// In the following line, v is a newVertex (not *newVertex) and does NOT implement Abser.
+// 	a = &v
+
+// 	fmt.Println(a.Abs())
+
+// 	var i I = T{"hello"}
+// 	i.M()
+// }
+
+func describe(i I) {
+	fmt.Printf("(%v, %T)\n", i, i)
+}
+
+func (t *T) M() {
+	if t == nil {
+		fmt.Println("<nil>")
+		return
+	}
+
+	fmt.Println(t.S)
+}
+
+type F float64
+
+func (f F) M() {
+	fmt.Println(f)
+}
+
+func interfaceValues() {
+	var i I
+
+	i = &T{"Hello"}
+	describe(i)
+	i.M()
+
+	i = F(math.Pi)
+	describe(i)
+	i.M()
+
+	var t *T
+	i = t
+	describe(i)
+	i.M()
+}
+
+func newDescribe(i interface{}) {
+	fmt.Printf("(%v, %T)\n", i, i)
+}
+
+func emptyInterface() {
+	var j interface{}
+	newDescribe(j)
+
+	j = 42
+	newDescribe(j)
+
+	j = "hello"
+	newDescribe(j)
+}
+
+func typeAssertion() {
+	var i interface{} = "hello"
+
+	s := i.(string)
+	fmt.Println(s)
+
+	s, ok := i.(string)
+	fmt.Println(s, ok)
+
+	f, ok := i.(float64)
+	fmt.Println(f, ok)
+
+	f = i.(float64) // panic
+	fmt.Println(f)
+}
+
+func typeSwitch(i interface{}) {
+	switch v := i.(type) {
+	case int:
+		fmt.Printf("Twice %v is %v\n", v, v*2)
+	case string:
+		fmt.Printf("%q is %v bytes long\n", v, len(v))
+	default:
+		fmt.Printf("I don't know about type %T!\n", v)
+	}
+}
+
+type Person struct {
+	Name string
+	Age  int
+}
+
+func (p Person) String() string {
+	return fmt.Sprintf("%v (%v years)", p.Name, p.Age)
+}
+
+func theStringer() {
+	a := Person{"Arthur Dent", 42}
+	z := Person{"Zaphod Beeblebrox", 9001}
+	fmt.Println(a, z)
+}
+
+type MyError struct {
+	When time.Time
+	What string
+}
+
+func (e *MyError) Error() string {
+	return fmt.Sprintf("at %v, %s",
+		e.When, e.What)
+}
+
+func run() error {
+	return &MyError{
+		time.Now(),
+		"it didn't work",
+	}
+}
+
+func theError() {
+	if err := run(); err != nil {
+		fmt.Println(err)
+	}
+}
+
+func theReader() {
+	r := strings.NewReader("Hello, Reader!")
+
+	b := make([]byte, 8)
+	for {
+		n, err := r.Read(b)
+		fmt.Printf("n = %v err = %v b = %v\n", n, err, b)
+		fmt.Printf("b[:n] = %q\n", b[:n])
+		if err == io.EOF {
+			break
+		}
+	}
+}
+
+func say(s string) {
+	for i := 0; i < 5; i++ {
+		time.Sleep(100 * time.Millisecond)
+		fmt.Println(s)
+	}
+}
+
+func theGoroutine() {
+	go say("world")
+	say("hello")
+}
+
+func sum(s []int, c chan int) {
+	sum := 0
+	for _, v := range s {
+		sum += v
+	}
+	c <- sum // send sum to c
+}
+
+func theChannel() {
+	s := []int{7, 2, 8, -9, 4, 0}
+
+	c := make(chan int)
+	go sum(s[:len(s)/2], c)
+	go sum(s[len(s)/2:], c)
+	x, y := <-c, <-c // receive from c
+
+	fmt.Println(x, y, x+y)
+}
+
+func bufferredChannels() {
+	ch := make(chan int, 2)
+	ch <- 88
+	ch <- 2
+
+	fmt.Println(<-ch)
+	fmt.Println(<-ch)
+}
+
+func fibonacci(n int, c chan int) {
+	x, y := 0, 1
+	for i := 0; i < n; i++ {
+		c <- x
+		x, y = y, x+y
+	}
+	close(c)
+}
+
+func rangeAndClose() {
+	c := make(chan int, 10)
+	go fibonacci(cap(c), c)
+	for i := range c {
+		fmt.Println(i)
+	}
+}
+
+func newFibonacci(c, quit chan int) {
+	x, y := 0, 1
+	for {
+		select {
+		case c <- x:
+			x, y = y, x+y
+		case <-quit:
+			fmt.Println("quit")
+			return
+		}
+	}
+}
+
+func theSelect() {
+	c := make(chan int)
+	quit := make(chan int)
+	go func() {
+		for i := 0; i < 10; i++ {
+			fmt.Println(<-c)
+		}
+		quit <- 0
+	}()
+	newFibonacci(c, quit)
+}
+
+func theDefaultSelection() {
+	tick := time.Tick(100 * time.Millisecond)
+	boom := time.After(500 * time.Millisecond)
+	for {
+		select {
+		case <-tick:
+			fmt.Println("tick.")
+		case <-boom:
+			fmt.Println("BOOM!")
+			return
+		default:
+			fmt.Println("    .")
+			time.Sleep(50 * time.Millisecond)
+		}
+	}
+}
+
+// SafeCounter is safe to use concurrently.
+type SafeCounter struct {
+	v   map[string]int
+	mux sync.Mutex
+}
+
+// Inc increments the counter for the given key.
+func (c *SafeCounter) Inc(key string) {
+	c.mux.Lock()
+	// Lock so only one goroutine at a time can access the map c.v.
+	c.v[key]++
+	c.mux.Unlock()
+}
+
+// Value returns the current value of the counter for the given key
+func (c *SafeCounter) Value(key string) int {
+	c.mux.Lock()
+	// Lock so only one goroutine at a time can access the map c.v
+	defer c.mux.Unlock()
+	return c.v[key]
+}
+
+func theMutex() {
+	c := SafeCounter{v: make(map[string]int)}
+	for i := 0; i < 1000; i++ {
+		go c.Inc("somekey")
+	}
+
+	time.Sleep(time.Second)
+	fmt.Println(c.Value("somekey"))
+}
+
 func main() {
 	// fmt.Printf("Hello Go!!!\n")
 	// fmt.Println("Math is fun!", rand.Intn(200))
@@ -457,5 +802,23 @@ func main() {
 	// theMap()
 	// mutatingMaps()
 	// theFunction()
-	functionClosure()
+	// functionClosure()
+	// theMethod()
+	// theInterface()
+	// interfaceValues()
+	// emptyInterface()
+	// typeAssertion()
+	// typeSwitch(21)
+	// typeSwitch("hello")
+	// typeSwitch(true)
+	// theStringer()
+	// theError()
+	// theReader()
+	// theGoroutine()
+	// theChannel()
+	// bufferredChannels()
+	// rangeAndClose()
+	// theSelect()
+	// theDefaultSelection()
+	theMutex()
 }

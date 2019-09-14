@@ -1,70 +1,154 @@
 package main
 
 import (
+	"bufio"
 	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"io"
 	"log"
+	"net"
+	"os"
+	"time"
 
-	"github.com/cbergoon/merkletree"
+	"github.com/davecgh/go-spew/spew"
+	"github.com/joho/godotenv"
 )
 
-//TestContent implements the Content interface provided by merkletree and represents the content stored in the tree.
-type TestContent struct {
-	x string
-	y int
+type Block struct {
+	Index     int
+	Timestamp string
+	Data      string
+	Hash      string
+	PrevHash  string
 }
 
-//CalculateHash hashes the values of a TestContent
-func (t TestContent) CalculateHash() ([]byte, error) {
+var Blockchain []Block
+
+func calculateHash(block Block) string {
+	record := string(block.Index) + block.Timestamp + block.Data + block.PrevHash
 	h := sha256.New()
-	if _, err := h.Write([]byte(t.x)); err != nil {
-		return nil, err
+	h.Write([]byte(record))
+	hashed := h.Sum(nil)
+	return hex.EncodeToString(hashed)
+}
+
+func generateBlock(oldBlock Block, Data string) (Block, error) {
+
+	var newBlock Block
+
+	t := time.Now()
+
+	newBlock.Index = oldBlock.Index + 1
+	newBlock.Timestamp = t.String()
+	newBlock.Data = Data
+	newBlock.PrevHash = oldBlock.Hash
+	newBlock.Hash = calculateHash(newBlock)
+
+	return newBlock, nil
+}
+
+func isBlockValid(newBlock, oldBlock Block) bool {
+	if oldBlock.Index+1 != newBlock.Index {
+		return false
 	}
 
-	return h.Sum(nil), nil
+	if oldBlock.Hash != newBlock.PrevHash {
+		return false
+	}
+
+	if calculateHash(newBlock) != newBlock.Hash {
+		return false
+	}
+
+	return true
 }
 
-//Equals tests for equality of two Contents
-func (t TestContent) Equals(other merkletree.Content) (bool, error) {
-	return t.x == other.(TestContent).x, nil
+func replaceChain(newBlocks []Block) {
+	if len(newBlocks) > len(Blockchain) {
+		Blockchain = newBlocks
+	}
+}
+
+var bcServer chan []Block
+
+func handleConn(conn net.Conn) {
+	defer conn.Close()
+
+	io.WriteString(conn, "Enter new Data:")
+
+	scanner := bufio.NewScanner(conn)
+
+	// Take in Data from stdin and add it to the blockchain after conducting necessary validation
+	go func() {
+		for scanner.Scan() {
+			Data := scanner.Text()
+			// if err != nil {
+			// 	log.Printf("%v not a string: %v", scanner.Text(), err)
+			// 	continue
+			// }
+
+			newBlock, err := generateBlock(Blockchain[len(Blockchain)-1], Data)
+			if err != nil {
+				log.Println(err)
+				continue
+			}
+
+			if isBlockValid(newBlock, Blockchain[len(Blockchain)-1]) {
+				newBlockchain := append(Blockchain, newBlock)
+				replaceChain(newBlockchain)
+			}
+
+			bcServer <- Blockchain
+			io.WriteString(conn, "\nEnter new Data:")
+		}
+	}()
+
+	// Simulate receiving broadcast
+	go func() {
+		for {
+			time.Sleep(30 * time.Second)
+			output, err := json.Marshal(Blockchain)
+			if err != nil {
+				log.Fatal(err)
+			}
+			io.WriteString(conn, string(output))
+		}
+	}()
+
+	for _ = range bcServer {
+		spew.Dump(Blockchain)
+	}
 }
 
 func main() {
-	//Build list of Content to build tree
-	var list []merkletree.Content
-
-	for i := 0; i < 10; i++ {
-		list = append(list, TestContent{x: string(i), y: i})
-	}
-	// list = append(list, TestContent{x: "Hello"})
-	// list = append(list, TestContent{x: "Hi"})
-	// list = append(list, TestContent{x: "Hey"})
-	// list = append(list, TestContent{x: "Hola"})
-
-	//Create a new Merkle Tree from the list of Content
-	t, err := merkletree.NewTree(list)
+	err := godotenv.Load()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	//Get the Merkle Root of the tree
-	mr := t.MerkleRoot()
-	log.Printf("%T, %v", mr, mr)
+	bcServer = make(chan []Block)
 
-	// //Verify the entire tree (hashes for each node) is valid
-	// vt, err := t.VerifyTree()
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-	// log.Println("Verify Tree: ", vt)
+	// Create genesis block
+	go func() {
+		t := time.Now()
+		genesisBlock := Block{0, t.String(), "", "", ""}
+		spew.Dump(genesisBlock)
+		Blockchain = append(Blockchain, genesisBlock)
+	}()
 
-	// //Verify a specific content in in the tree
-	// vc, err := t.VerifyContent(list[0])
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
+	// Start TCP and serve TCP server
+	server, err := net.Listen("tcp", ":"+os.Getenv("PORT"))
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer server.Close()
 
-	// log.Println("Verify Content: ", vc)
-
-	//String representation
-	// log.Println(t)
+	for {
+		conn, err := server.Accept()
+		if err != nil {
+			log.Fatal(err)
+		}
+		go handleConn(conn)
+	}
 }

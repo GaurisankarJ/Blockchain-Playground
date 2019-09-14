@@ -60,7 +60,6 @@ func calculateBlockHash(block Block) string {
 
 // generateBlock creates a new block using previous block's hash
 func generateBlock(oldBlock Block, Data string, address string) (Block, error) {
-
 	var newBlock Block
 
 	t := time.Now()
@@ -101,10 +100,10 @@ func handleConn(conn net.Conn) {
 			io.WriteString(conn, msg)
 		}
 	}()
-	// validator address
+	// Validator address
 	var address string
 
-	// allow user to allocate number of tokens to stake, the greater the number of tokens, the greater chance to forging a new block
+	// Allow user to allocate number of tokens to stake, the greater the number of tokens, the greater chance to forging a new block
 	io.WriteString(conn, "Enter token balance:")
 	scanBalance := bufio.NewScanner(conn)
 	for scanBalance.Scan() {
@@ -126,10 +125,10 @@ func handleConn(conn net.Conn) {
 
 	go func() {
 		for {
-			// take in BPM from stdin and add it to blockchain after conducting necessary validation
+			// Take in data from stdin and add it to blockchain after conducting necessary validation
 			for scanData.Scan() {
 				data := scanData.Text()
-				// if malicious party tries to mutate the chain with a bad input, delete them as a validator and they lose their staked tokens
+				// If malicious party tries to mutate the chain with a bad input, delete them as a validator and they lose their staked tokens
 				// if err != nil {
 				// 	log.Printf("%v not a number: %v", scanBPM.Text(), err)
 				// 	delete(validators, address)
@@ -140,7 +139,7 @@ func handleConn(conn net.Conn) {
 				oldLastIndex := Blockchain[len(Blockchain)-1]
 				mutex.Unlock()
 
-				// create newBlock for consideration to be forged
+				// Create newBlock for consideration to be forged
 				newBlock, err := generateBlock(oldLastIndex, data, address)
 				if err != nil {
 					log.Println(err)
@@ -154,7 +153,7 @@ func handleConn(conn net.Conn) {
 		}
 	}()
 
-	// simulate receiving broadcast
+	// Simulate receiving broadcast
 	for {
 		time.Sleep(time.Minute)
 		mutex.Lock()
